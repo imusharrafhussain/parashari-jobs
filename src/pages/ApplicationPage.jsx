@@ -17,7 +17,6 @@ function ApplicationPage() {
         city: '',
         state: '',
         linkedin: '',
-        linkedin: '',
         collegeName: '',
         currentCompany: '',
         jobCategory: '',
