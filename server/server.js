@@ -6,7 +6,6 @@ import { connectDB } from './config/database.js'
 import otpRoutes from './routes/otp.js'
 import candidateRoutes from './routes/candidates.js'
 import applicationRoutes from './routes/applications.js'
-import adminRoutes from './routes/admin.js'
 import errorHandler from './middleware/errorHandler.js'
 import logger from './utils/logger.js'
 import { setupSwagger } from './docs/swagger.js'
@@ -60,7 +59,6 @@ app.use(express.urlencoded({ limit: '1mb', extended: true }))
 app.use('/api/otp', otpRoutes)
 app.use('/api/candidates', candidateRoutes)
 app.use('/api/applications', applicationRoutes)
-app.use('/api/admin', adminRoutes)
 
 // API Documentation (Swagger) - Protected in production
 setupSwagger(app)

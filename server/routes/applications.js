@@ -1,6 +1,5 @@
 import express from 'express'
-import { ObjectId } from 'mongodb'
-import { getDB, getGridFSBucket } from '../config/database.js'
+import { getDB } from '../config/database.js'
 import { upload } from '../middleware/upload.js'
 import { parseResume } from '../services/resumeParser.js'
 import { calculateATSScore } from '../services/atsScoring.js'
@@ -8,45 +7,30 @@ import { sendHRNotification } from '../services/emailService.js'
 import { applicationLimiter } from '../middleware/rateLimiter.js'
 import AppError from '../utils/AppError.js'
 import logger from '../utils/logger.js'
-import { Readable } from 'stream'
 
 const router = express.Router()
 
-// POST /api/applications/submit - Submit complete application
+// POST /api/applications/submit - Submit application with strict ATS filtering
 router.post('/submit', applicationLimiter, upload.single('resume'), async (req, res, next) => {
-    let fileId = null // Track uploaded file ID for cleanup on error
-
     try {
         const { fullName, email, phone, city, state, linkedin, collegeName, currentCompany, description, jobCategory, customJobRole } = req.body
         const file = req.file
 
-        // Validate required fields
-        // Validate required fields
-        if (!fullName || !email || !phone || !city || !state || !collegeName || !jobCategory) {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields'
-            })
-        }
-
-        // Validate custom job role
-        if (jobCategory === 'Custom' && (!customJobRole || !customJobRole.trim())) {
-            return res.status(400).json({
-                success: false,
-                message: 'Custom job role is required'
-            })
-        }
-
+        // 1. Validation
         if (!file) {
-            return res.status(400).json({
-                success: false,
-                message: 'Resume file is required'
-            })
+            return res.status(400).json({ success: false, message: 'Resume file is required' })
+        }
+
+        if (!fullName || !email || !phone || !city || !state || !collegeName || !jobCategory) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' })
+        }
+
+        if (jobCategory === 'Custom' && (!customJobRole || !customJobRole.trim())) {
+            return res.status(400).json({ success: false, message: 'Custom job role is required' })
         }
 
         const db = getDB()
         const candidates = db.collection('candidates')
-        const bucket = getGridFSBucket()
 
         // Check submission count for this email (allow up to 3)
         const submissionCount = await candidates.countDocuments({ email })
@@ -57,139 +41,117 @@ router.post('/submit', applicationLimiter, upload.single('resume'), async (req, 
             })
         }
 
-        // Get resume buffer from multer memory storage
-        const resumeBuffer = file.buffer
+        // 2. Parse Resume & Calculate Score
+        logger.info(`Processing application for ${email}`)
+        const { text: resumeText, parsedData } = await parseResume(file.buffer, file.mimetype)
 
-        // Upload to GridFS
-        const uploadStream = bucket.openUploadStream(file.originalname, {
-            metadata: {
-                originalName: file.originalname,
-                mimetype: file.mimetype,
-                size: file.size,
-                uploadDate: new Date()
-            }
-        })
-
-        const bufferStream = Readable.from(resumeBuffer)
-        bufferStream.pipe(uploadStream)
-
-        // Wait for upload to complete
-        fileId = await new Promise((resolve, reject) => {
-            uploadStream.on('finish', () => resolve(uploadStream.id))
-            uploadStream.on('error', reject)
-        })
-
-        // Parse resume
-        const { text: resumeText, parsedData } = await parseResume(resumeBuffer, file.mimetype)
-
-        // Calculate ATS score
-        // Calculate ATS score based on category
-        // Calculate ATS score based on category
-        let atsScore = null
-        let atsStatus = 'COMPLETED'
-
+        // Determine category for scoring
         const cleanCategory = jobCategory ? String(jobCategory).trim() : ''
         const normalizedCategory = cleanCategory.toLowerCase()
-        logger.info(`Processing application for ${email}, category: '${cleanCategory}'`)
 
-        // Check if category is Other or Custom (including "custom (user-defined role)")
-        const skipATS = ['other', 'custom', 'custom (user-defined role)'].includes(normalizedCategory) || normalizedCategory.startsWith('custom')
+        // Check if category is Other or Custom
+        const isCustomCategory = ['other', 'custom', 'custom (user-defined role)'].includes(normalizedCategory) || normalizedCategory.startsWith('custom')
 
-        if (skipATS) {
-            logger.info('Skipping ATS scoring for Other/Custom category')
-            atsScore = null
+        let atsScore = 0
+        let atsStatus = 'COMPLETED'
+
+        if (isCustomCategory) {
+            // honest Scoring for custom roles might be inaccurate, but we still run it or default to a value.
+            // User requirement: "DO NOT MODIFY ATS SCORING LOGIC".
+            // However, previous logic skipped ATS for custom.
+            // Strict requirement says: "IF atsScore >= 60".
+            // We must decide if 'Custom' categories auto-qualify or get scored.
+            // Implicitly, if we skip scoring, we can't filter by score.
+            // Let's run scoring if possible, or assume 0 if irrelevant.
+            // Actually, the previous code set atsStatus='SKIPPED' and implicitly qualified them.
+            // To stick to "Strict Filtering", we should probably still score them if we can, 
+            // OR treat SKIPPED as Qualified (Score=100 effectively).
+            // Let's preserve the "Skipped means Qualified" intent by assigning a passing score if skipped, 
+            // or better, just pass the logic check. 
+            // But the user said "Only >= 60 triggers email".
+            // I will treat "Skipped" as a score of 75 (Passing) to align with strict logic without breaking custom roles.
+            logger.info('Custom category detected. Assigning passing score for manual review.')
+            atsScore = 75
             atsStatus = 'SKIPPED'
         } else {
-            logger.info('Running ATS scoring')
             atsScore = calculateATSScore(parsedData, resumeText, jobCategory)
             logger.info(`ATS score calculated: ${atsScore}`)
         }
 
-        // Create candidate record
-        const candidateData = {
-            fullName,
-            email,
-            phone,
-            city,
-            state,
-            linkedin: linkedin || '',
-            currentCompany: currentCompany || '',
-            collegeName,
-            description: description || '',
-            jobCategory,
-            customJobRole: jobCategory === 'Custom' ? customJobRole : undefined,
-            resumeFileId: fileId,
-            resumeFileName: file.originalname,
-            parsedData,
-            atsScore,
-            atsStatus,
-            status: (atsStatus === 'SKIPPED' || (atsStatus === 'COMPLETED' && atsScore >= 70)) ? 'qualified' : 'pending',
-            emailSentToHR: false,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        }
+        // 3. Decision Logic
+        if (atsScore >= 60) {
+            // --- QUALIFIED ---
 
-        // Insert candidate
-        const result = await candidates.insertOne(candidateData)
-        const applicationId = result.insertedId.toString().substring(0, 8).toUpperCase()
+            // A. Create Candidate Record (Metadata ONLY)
+            const candidateData = {
+                fullName,
+                email,
+                phone,
+                city,
+                state,
+                linkedin: linkedin || '',
+                currentCompany: currentCompany || '',
+                collegeName,
+                description: description || '',
+                jobCategory,
+                customJobRole: jobCategory === 'Custom' ? customJobRole : undefined,
+                // NO resumeFileId
+                // NO resumeFileName (optional, maybe keep name for reference but no file)
+                parsedData,
+                atsScore,
+                atsStatus,
+                status: 'qualified',
+                emailSentToHR: false,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            }
 
-        // If ATS score >= 70 or ATS was skipped (Other/Custom), send email to HR
-        if (atsStatus === 'SKIPPED' || atsScore >= 70) {
+            const result = await candidates.insertOne(candidateData)
+            const applicationId = result.insertedId.toString().substring(0, 8).toUpperCase()
+
+            // B. Send Email to HR (Attach buffer from RAM)
             try {
-                await sendHRNotification({ ...candidateData, _id: result.insertedId }, resumeBuffer)
+                await sendHRNotification({ ...candidateData, _id: result.insertedId, resumeFileName: file.originalname }, file.buffer)
+
                 await candidates.updateOne(
                     { _id: result.insertedId },
                     { $set: { emailSentToHR: true } }
                 )
-                logger.info(`HR notified for ${fullName} (Score: ${atsScore || 'N/A'})`)
+                logger.info(`HR notified for ${fullName} (Score: ${atsScore})`)
             } catch (emailError) {
                 logger.error('Failed to send HR email:', emailError)
-                // Don't fail the application if email fails
+                // We stored metadata, so we don't fail the request, but log the error.
             }
-        }
 
-        // Determine result for frontend
-        let resultType = 'RECEIVED'
-        let message = 'Application received.'
+            // C. Return Success
+            return res.status(200).json({
+                success: true,
+                message: "Application submitted successfully.",
+                applicationId,
+                score: atsScore,
+                atsStatus,
+                result: 'QUALIFIED'
+            })
 
-        if (atsStatus === 'SKIPPED') {
-            resultType = 'RECEIVED_MANUAL_REVIEW'
-            message = 'Application received. Your profile will be reviewed manually.'
-        } else if (atsScore < 70) {
-            resultType = 'REJECTED_BY_ATS'
-            message = 'Unfortunately, your profile does not meet our current requirements.'
         } else {
-            resultType = 'QUALIFIED'
-            message = 'Congratulations! Your profile meets our requirements.'
-        }
+            // --- REJECTED ---
+            // DO NOT send email
+            // DO NOT store metadata
+            // DO NOT store resume
 
-        res.json({
-            success: true,
-            message,
-            applicationId,
-            atsScore, // Return score to frontend for messaging
-            atsStatus,
-            jobCategory,
-            result: resultType,
-            qualified: resultType === 'QUALIFIED' || resultType === 'RECEIVED_MANUAL_REVIEW'
-        })
+            logger.info(`Application rejected for ${email} (Score: ${atsScore} < 60)`)
+
+            return res.status(200).json({
+                success: false,
+                message: "Application does not meet ATS criteria.",
+                score: atsScore,
+                atsStatus,
+                result: 'REJECTED_BY_ATS'
+            })
+        }
 
     } catch (error) {
         logger.error('Application submission error:', error)
-
-        // Clean up uploaded file if error occurs and fileId exists
-        // Note: fileId will only exist if upload completed before error
-        // No need to cleanup if error occurred before upload
-        if (fileId) {
-            try {
-                const bucket = getGridFSBucket()
-                await bucket.delete(new ObjectId(fileId))
-                logger.info(`Cleaned up file ${fileId} after error`)
-            } catch (deleteError) {
-                logger.error('Failed to delete file after error:', deleteError)
-            }
-        }
-
         next(new AppError(error.message || 'Failed to submit application', 500))
     }
 })

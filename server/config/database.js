@@ -1,4 +1,4 @@
-import { MongoClient, GridFSBucket } from 'mongodb'
+import { MongoClient } from 'mongodb'
 import logger from '../utils/logger.js'
 
 let db = null
@@ -11,10 +11,6 @@ export async function connectDB() {
             connectTimeoutMS: 10000
         })
         db = client.db()
-        gridFSBucket = new GridFSBucket(db, {
-            bucketName: 'resumes'
-        })
-
         // Create and verify indexes
         await db.collection('candidates').createIndex({ email: 1 })
         await db.collection('otps').createIndex({ email: 1 })
@@ -35,12 +31,5 @@ export function getDB() {
         throw new Error('Database not initialized')
     }
     return db
-}
-
-export function getGridFSBucket() {
-    if (!gridFSBucket) {
-        throw new Error('GridFS not initialized')
-    }
-    return gridFSBucket
 }
 
