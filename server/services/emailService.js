@@ -11,7 +11,8 @@ function initTransporter() {
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
-    }
+    },
+    family: 4 // Force IPv4 to avoid potential IPv6 timeouts on Render
   })
 
   return transporter
