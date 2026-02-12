@@ -12,7 +12,14 @@
 - 📧 **Email Notifications** for both candidates (OTP) and HR (qualified profiles)
 - 🗄️ **Cloud Storage** using MongoDB GridFS for resume files
 - 🔒 **Submission Limits** (max 3 applications per email)
-- 🌐 **Project Status**: Local Development Only
+- 🌐 **Deployment**: Ready for Vercel (Frontend) & Render (Backend)
+
+---
+
+## 🌐 Live Demo
+
+- **Frontend**: [https://your-app.vercel.app](https://your-app.vercel.app)
+- **Backend**: [https://your-backend.onrender.com](https://your-backend.onrender.com)
 
 ---
 
