@@ -69,10 +69,10 @@ export const otpVerifyLimiterEmail = rateLimit({
 
 
 // IP-based rate limiter for application submission
-// 3 requests per hour per IP
+// 6 requests per hour per IP
 export const applicationLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 3,
+    max: 6,
     message: {
         success: false,
         message: 'Too many requests. Please try again later.'
@@ -80,4 +80,30 @@ export const applicationLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     handler: rateLimitHandler
+})
+
+// Global burst limiter for all application submissions
+// 100 submissions per 15 minutes globally
+export const globalSubmissionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100,
+    message: {
+        success: false,
+        message: 'Server is busy. Please try again later.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: () => 'global_submission_key', // same key for everyone
+    handler: (req, res) => {
+        console.warn(JSON.stringify({
+            level: "warn",
+            event: "rate_limit_exceeded",
+            type: "global_submission",
+            timestamp: new Date().toISOString()
+        }))
+        res.status(429).json({
+            success: false,
+            message: 'Too many submissions. Please try again later.'
+        })
+    }
 })
