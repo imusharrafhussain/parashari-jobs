@@ -1,4 +1,5 @@
 import { MongoClient, GridFSBucket } from 'mongodb'
+import logger from '../utils/logger.js'
 
 let db = null
 let gridFSBucket = null
@@ -14,14 +15,17 @@ export async function connectDB() {
             bucketName: 'resumes'
         })
 
-        // Create indexes
+        // Create and verify indexes
         await db.collection('candidates').createIndex({ email: 1 })
+        await db.collection('otps').createIndex({ email: 1 })
         await db.collection('otps').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 })
 
-        console.log('✅ Connected to MongoDB')
+        logger.info('✅ Connected to MongoDB')
+        logger.info('✅ Database indexes created')
+
         return client
     } catch (error) {
-        console.error('❌ MongoDB connection error:', error)
+        logger.error('❌ MongoDB connection error:', error)
         process.exit(1)
     }
 }
@@ -39,3 +43,4 @@ export function getGridFSBucket() {
     }
     return gridFSBucket
 }
+

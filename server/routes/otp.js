@@ -3,6 +3,10 @@ import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { getDB } from '../config/database.js'
 import { sendOTPEmail } from '../services/emailService.js'
+import { otpSendLimiter, otpVerifyLimiterIP, otpVerifyLimiterEmail } from '../middleware/rateLimiter.js'
+import { validateOTPSend, validateOTPVerify } from '../middleware/validators.js'
+import AppError from '../utils/AppError.js'
+import logger from '../utils/logger.js'
 
 const router = express.Router()
 
@@ -12,13 +16,9 @@ function generateOTP() {
 }
 
 // POST /api/otp/send - Send OTP to email
-router.post('/send', async (req, res) => {
+router.post('/send', otpSendLimiter, validateOTPSend, async (req, res, next) => {
     try {
         const { email } = req.body
-
-        if (!email) {
-            return res.status(400).json({ success: false, message: 'Email is required' })
-        }
 
         const db = getDB()
         const otps = db.collection('otps')
@@ -32,10 +32,13 @@ router.post('/send', async (req, res) => {
         // Delete any existing OTP for this email
         await otps.deleteMany({ email })
 
-        // Store OTP with 10-minute expiry
+        // Store OTP with 10-minute expiry and brute-force protection fields
         await otps.insertOne({
             email,
             otpHash,
+            failedAttempts: 0,
+            locked: false,
+            lockedAt: null,
             expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
             createdAt: new Date()
         })
@@ -43,21 +46,20 @@ router.post('/send', async (req, res) => {
         // Send OTP via email
         await sendOTPEmail(email, otp)
 
+        logger.info(`OTP sent to ${email}`)
+
         res.json({ success: true, message: 'OTP sent successfully' })
     } catch (error) {
-        console.error('Send OTP error:', error)
-        res.status(500).json({ success: false, message: 'Failed to send OTP' })
+        logger.error('Send OTP error:', error)
+        next(new AppError('Failed to send OTP', 500))
     }
 })
 
 // POST /api/otp/verify - Verify OTP
-router.post('/verify', async (req, res) => {
+// Apply BOTH IP-based and email-based rate limiting
+router.post('/verify', otpVerifyLimiterIP, otpVerifyLimiterEmail, validateOTPVerify, async (req, res, next) => {
     try {
         const { email, otp } = req.body
-
-        if (!email || !otp) {
-            return res.status(400).json({ success: false, message: 'Email and OTP are required' })
-        }
 
         const db = getDB()
         const otps = db.collection('otps')
@@ -65,31 +67,73 @@ router.post('/verify', async (req, res) => {
         // Find OTP record
         const otpRecord = await otps.findOne({ email })
 
+        // Generic error message - never reveal if OTP exists, is locked, or is wrong
+        const genericError = 'Invalid or expired OTP'
+
         if (!otpRecord) {
-            return res.json({ success: false, verified: false, message: 'OTP not found or expired' })
+            logger.warn(`OTP verification failed - no record found for ${email}`)
+            return res.json({ success: false, verified: false, message: genericError })
+        }
+
+        // Check if OTP is locked (too many failed attempts)
+        if (otpRecord.locked) {
+            logger.warn(`OTP verification failed - locked for ${email}`)
+            // Delete locked OTP
+            await otps.deleteOne({ email })
+            return res.json({ success: false, verified: false, message: genericError })
         }
 
         // Check if OTP is expired
         if (new Date() > otpRecord.expiresAt) {
+            logger.warn(`OTP verification failed - expired for ${email}`)
             await otps.deleteOne({ email })
-            return res.json({ success: false, verified: false, message: 'OTP expired' })
+            return res.json({ success: false, verified: false, message: genericError })
         }
 
         // Verify OTP
         const isValid = await bcrypt.compare(otp, otpRecord.otpHash)
 
         if (!isValid) {
-            return res.json({ success: false, verified: false, message: 'Invalid OTP' })
+            // Increment failed attempts
+            const newFailedAttempts = otpRecord.failedAttempts + 1
+
+            logger.warn(`OTP verification failed - invalid OTP for ${email} (attempt ${newFailedAttempts}/5)`)
+
+            // Lock if 5 or more failed attempts
+            if (newFailedAttempts >= 5) {
+                await otps.updateOne(
+                    { email },
+                    {
+                        $set: {
+                            locked: true,
+                            lockedAt: new Date(),
+                            failedAttempts: newFailedAttempts
+                        }
+                    }
+                )
+                logger.warn(`OTP locked for ${email} - too many failed attempts`)
+            } else {
+                // Just increment the counter
+                await otps.updateOne(
+                    { email },
+                    { $set: { failedAttempts: newFailedAttempts } }
+                )
+            }
+
+            return res.json({ success: false, verified: false, message: genericError })
         }
 
-        // Delete OTP after successful verification
+        // Valid OTP - delete it after successful verification
         await otps.deleteOne({ email })
+
+        logger.info(`OTP verified successfully for ${email}`)
 
         res.json({ success: true, verified: true, message: 'OTP verified successfully' })
     } catch (error) {
-        console.error('Verify OTP error:', error)
-        res.status(500).json({ success: false, message: 'Failed to verify OTP' })
+        logger.error('Verify OTP error:', error)
+        next(new AppError('Failed to verify OTP', 500))
     }
 })
 
 export default router
+

@@ -1,0 +1,105 @@
+name: Backend Security & Quality Check
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'server/**'
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Run security audit
+        working-directory: ./server
+        run: npm audit --audit-level=high
+        continue-on-error: false
+
+      - name: Check for vulnerabilities
+        working-directory: ./server
+        run: |
+          AUDIT_RESULT=$(npm audit --audit-level=high --json)
+          HIGH_COUNT=$(echo "$AUDIT_RESULT" | jq '.metadata.vulnerabilities.high // 0')
+          CRITICAL_COUNT=$(echo "$AUDIT_RESULT" | jq '.metadata.vulnerabilities.critical // 0')
+          
+          echo "High vulnerabilities: $HIGH_COUNT"
+          echo "Critical vulnerabilities: $CRITICAL_COUNT"
+          
+          if [ "$HIGH_COUNT" -gt 0 ] || [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ Security vulnerabilities found!"
+            exit 1
+          fi
+          echo "✅ No high or critical vulnerabilities found"
+
+  code-quality:
+    runs-on: ubuntu-latest
+    needs: security-audit
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: ./server
+        run: npm ci
+
+      - name: Check for missing environment variables
+        run: |
+          if [ ! -f "server/.env.example" ]; then
+            echo "❌ .env.example file missing"
+            exit 1
+          fi
+          echo "✅ Environment configuration documented"
+
+      - name: Verify required files
+        run: |
+          REQUIRED_FILES=(
+            "server/server.js"
+            "server/package.json"
+            "server/config/database.js"
+            "server/middleware/errorHandler.js"
+            "server/middleware/rateLimiter.js"
+            "server/utils/logger.js"
+          )
+          
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Required file missing: $file"
+              exit 1
+            fi
+          done
+          echo "✅ All required files present"
+
+  # Optional: Deploy to Render (uncomment if using Render webhook)
+
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: [security-audit, code-quality]
+  #   if: github.ref == 'refs/heads/main'
+  #   steps:
+  #     - name: Trigger Render Deployment
+  #       run: |
+  #         curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}

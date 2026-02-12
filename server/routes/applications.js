@@ -5,12 +5,15 @@ import { upload } from '../middleware/upload.js'
 import { parseResume } from '../services/resumeParser.js'
 import { calculateATSScore } from '../services/atsScoring.js'
 import { sendHRNotification } from '../services/emailService.js'
+import { applicationLimiter } from '../middleware/rateLimiter.js'
+import AppError from '../utils/AppError.js'
+import logger from '../utils/logger.js'
 import { Readable } from 'stream'
 
 const router = express.Router()
 
 // POST /api/applications/submit - Submit complete application
-router.post('/submit', upload.single('resume'), async (req, res) => {
+router.post('/submit', applicationLimiter, upload.single('resume'), async (req, res, next) => {
     let fileId = null // Track uploaded file ID for cleanup on error
 
     try {
@@ -87,18 +90,19 @@ router.post('/submit', upload.single('resume'), async (req, res) => {
 
         const cleanCategory = jobCategory ? String(jobCategory).trim() : ''
         const normalizedCategory = cleanCategory.toLowerCase()
-        console.log(`Processing application for category: '${cleanCategory}' (Normalized: '${normalizedCategory}')`)
+        logger.info(`Processing application for ${email}, category: '${cleanCategory}'`)
 
         // Check if category is Other or Custom (including "custom (user-defined role)")
         const skipATS = ['other', 'custom', 'custom (user-defined role)'].includes(normalizedCategory) || normalizedCategory.startsWith('custom')
 
         if (skipATS) {
-            console.log('Skipping ATS scoring for Other/Custom category')
+            logger.info('Skipping ATS scoring for Other/Custom category')
             atsScore = null
             atsStatus = 'SKIPPED'
         } else {
-            console.log('Running ATS scoring')
+            logger.info('Running ATS scoring')
             atsScore = calculateATSScore(parsedData, resumeText, jobCategory)
+            logger.info(`ATS score calculated: ${atsScore}`)
         }
 
         // Create candidate record
@@ -137,9 +141,9 @@ router.post('/submit', upload.single('resume'), async (req, res) => {
                     { _id: result.insertedId },
                     { $set: { emailSentToHR: true } }
                 )
-                console.log(`✅ HR notified for ${fullName} (Score: ${atsScore})`)
+                logger.info(`HR notified for ${fullName} (Score: ${atsScore || 'N/A'})`)
             } catch (emailError) {
-                console.error('Failed to send HR email:', emailError)
+                logger.error('Failed to send HR email:', emailError)
                 // Don't fail the application if email fails
             }
         }
@@ -171,7 +175,7 @@ router.post('/submit', upload.single('resume'), async (req, res) => {
         })
 
     } catch (error) {
-        console.error('Application submission error:', error)
+        logger.error('Application submission error:', error)
 
         // Clean up uploaded file if error occurs and fileId exists
         // Note: fileId will only exist if upload completed before error
@@ -180,15 +184,13 @@ router.post('/submit', upload.single('resume'), async (req, res) => {
             try {
                 const bucket = getGridFSBucket()
                 await bucket.delete(new ObjectId(fileId))
+                logger.info(`Cleaned up file ${fileId} after error`)
             } catch (deleteError) {
-                console.error('Failed to delete file after error:', deleteError)
+                logger.error('Failed to delete file after error:', deleteError)
             }
         }
 
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to submit application'
-        })
+        next(new AppError(error.message || 'Failed to submit application', 500))
     }
 })
 
