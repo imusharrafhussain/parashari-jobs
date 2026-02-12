@@ -18,7 +18,7 @@ function Navbar() {
       <div className="container">
         <div className="navbar-content">
           <div className="nav-left">
-            <img src="/logo.svg" alt="Logo" className="rotating-logo" />
+            <img src="/logo.png" alt="Logo" className="rotating-logo" />
           </div>
 
           <Link to="/" className="logo">
