@@ -78,7 +78,7 @@ import nodemailer from 'nodemailer'
 app.get('/api/debug/email-check', async (req, res) => {
     try {
         const transporter = nodemailer.createTransport({
-            service: process.env.EMAIL_SERVICE || 'gmail',
+            host: 'smtp.gmail.com',
             port: 465,
             secure: true, // Use SSL
             auth: {

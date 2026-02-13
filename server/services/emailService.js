@@ -7,6 +7,7 @@ function initTransporter() {
   if (transporter) return transporter
 
   transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
     port: 465,
     secure: true, // Use SSL
     auth: {
