@@ -26,8 +26,9 @@ app.use(helmet({
 // CORS Middleware - Strict Configuration
 const allowedOrigins = [
     'http://localhost:5173',
-    'https://parashari-jobs-portal.vercel.app'
-]
+    'https://parashari-jobs-portal.vercel.app',
+    process.env.FRONTEND_URL // Add this to support env variable
+].filter(Boolean) // Remove undefined if env var is missing
 
 app.use(cors({
     origin: (origin, callback) => {
