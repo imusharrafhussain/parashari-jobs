@@ -3,7 +3,6 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import { connectDB } from './config/database.js'
-import otpRoutes from './routes/otp.js'
 import candidateRoutes from './routes/candidates.js'
 import applicationRoutes from './routes/applications.js'
 import errorHandler from './middleware/errorHandler.js'
@@ -57,7 +56,6 @@ app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ limit: '1mb', extended: true }))
 
 // Routes
-app.use('/api/otp', otpRoutes)
 app.use('/api/candidates', candidateRoutes)
 app.use('/api/applications', applicationRoutes)
 

@@ -17,10 +17,7 @@ export const candidateAPI = {
     checkDuplicate: (email) => api.post('/candidates/check-duplicate', { email }),
 }
 
-export const otpAPI = {
-    send: (email) => api.post('/otp/send', { email }),
-    verify: (email, otp) => api.post('/otp/verify', { email, otp }),
-}
+
 
 export const applicationAPI = {
     submit: (formData) => {

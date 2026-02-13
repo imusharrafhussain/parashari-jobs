@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { candidateAPI, otpAPI, applicationAPI } from '../utils/api'
+import { candidateAPI, applicationAPI } from '../utils/api'
 import { getStates, getCitiesByState } from '../data/indianLocations'
 
 function ApplicationPage() {
@@ -40,11 +40,6 @@ function ApplicationPage() {
 
     // Available cities based on selected state
     const [availableCities, setAvailableCities] = useState([])
-
-    // OTP state
-    const [otp, setOtp] = useState('')
-    const [otpSent, setOtpSent] = useState(false)
-    const [canResend, setCanResend] = useState(false)
 
     // Resume state
     const [resumeFile, setResumeFile] = useState(null)
@@ -117,7 +112,7 @@ function ApplicationPage() {
         return Object.keys(newErrors).length === 0
     }
 
-    // Step 1: Submit personal info and send OTP
+    // Step 1: Submit personal info and move to Resume Upload
     const handleStep1Submit = async (e) => {
         e.preventDefault()
 
@@ -151,60 +146,16 @@ function ApplicationPage() {
                 toast.info(`Submissions remaining: ${remaining}/${limit}`, { autoClose: 3000 })
             }
 
-            // Send OTP
-            await otpAPI.send(formData.email)
-            setOtpSent(true)
-            toast.success('OTP sent to your email!')
+            // Move directly to resume upload
             setStep(2)
 
-            // Enable resend after 60 seconds
-            setTimeout(() => setCanResend(true), 60000)
-
         } catch (error) {
-            console.error("OTP API Error:", error);
-            toast.error(error.response?.data?.message || 'Failed to send OTP')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    // Resend OTP
-    const handleResendOTP = async () => {
-        setLoading(true)
-        try {
-            await otpAPI.send(formData.email)
-            toast.success('OTP resent to your email!')
-            setCanResend(false)
-            setTimeout(() => setCanResend(true), 60000)
-        } catch (error) {
-            toast.error('Failed to resend OTP')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    // Step 2: Verify OTP
-    const handleOTPVerify = async (e) => {
-        e.preventDefault()
-
-        if (!otp || otp.length !== 6) {
-            toast.error('Please enter a valid 6-digit OTP')
-            return
-        }
-
-        setLoading(true)
-
-        try {
-            const { data } = await otpAPI.verify(formData.email, otp)
-
-            if (data.verified) {
-                toast.success('Email verified successfully!')
-                setStep(3)
-            } else {
-                toast.error('Invalid or expired OTP')
-            }
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'OTP verification failed')
+            console.error("Duplicate Check Error:", error);
+            // Even if duplicate check fails (network error), we might want to let them proceed 
+            // and handle it at final submission, but for now let's block to be safe or just warn.
+            // Let's fallback to allowing them to proceed if it's just a network glitch, 
+            // but the backend will enforce the limit anyway.
+            setStep(2)
         } finally {
             setLoading(false)
         }
@@ -232,7 +183,7 @@ function ApplicationPage() {
         setResumeFile(file)
     }
 
-    // Step 3: Submit resume
+    // Step 2: Submit application
     const handleFinalSubmit = async (e) => {
         e.preventDefault()
 
@@ -271,9 +222,6 @@ function ApplicationPage() {
                 customJobRole: formData.customJobRole,
                 fullName: formData.fullName
             });
-            for (let [key, value] of formDataToSend.entries()) {
-                console.log(`FormData: ${key} = ${value}`);
-            }
 
             const { data } = await applicationAPI.submit(formDataToSend)
 
@@ -309,11 +257,6 @@ function ApplicationPage() {
                         <div className="step-line"></div>
                         <div className={`step ${step >= 2 ? 'active' : ''}`}>
                             <div className="step-number">2</div>
-                            <div className="step-label">Verify Email</div>
-                        </div>
-                        <div className="step-line"></div>
-                        <div className={`step ${step >= 3 ? 'active' : ''}`}>
-                            <div className="step-number">3</div>
                             <div className="step-label">Upload Resume</div>
                         </div>
                     </div>
@@ -485,61 +428,13 @@ function ApplicationPage() {
                             </div>
 
                             <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>
-                                {loading ? 'Sending OTP...' : 'Next: Verify Email →'}
+                                {loading ? 'Checking...' : 'Next: Upload Resume →'}
                             </button>
                         </form>
                     )}
 
-                    {/* Step 2: OTP Verification */}
+                    {/* Step 2: Resume Upload */}
                     {step === 2 && (
-                        <form onSubmit={handleOTPVerify}>
-                            <h2 className="form-title">Verify Your Email</h2>
-                            <p className="form-subtitle">
-                                We've sent a 6-digit OTP to <strong>{formData.email}</strong>
-                            </p>
-
-                            <div className="form-group">
-                                <label className="form-label">Enter OTP</label>
-                                <input
-                                    type="text"
-                                    className="form-input otp-input"
-                                    placeholder="000000"
-                                    maxLength="6"
-                                    value={otp}
-                                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                                />
-                                <p className="form-hint">Valid for 10 minutes</p>
-                            </div>
-
-                            <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>
-                                {loading ? 'Verifying...' : 'Verify OTP'}
-                            </button>
-
-                            <div className="text-center mt-md">
-                                <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    onClick={handleResendOTP}
-                                    disabled={!canResend || loading}
-                                >
-                                    {canResend ? 'Resend OTP' : 'Resend OTP (wait 60s)'}
-                                </button>
-                            </div>
-
-                            <div className="text-center mt-sm">
-                                <button
-                                    type="button"
-                                    className="text-link"
-                                    onClick={() => setStep(1)}
-                                >
-                                    ← Change Email
-                                </button>
-                            </div>
-                        </form>
-                    )}
-
-                    {/* Step 3: Resume Upload */}
-                    {step === 3 && (
                         <form onSubmit={handleFinalSubmit}>
                             <h2 className="form-title">Upload Your Resume</h2>
                             <p className="form-subtitle">
@@ -578,6 +473,16 @@ function ApplicationPage() {
                                     {loading ? 'Submitting...' : 'Submit Application ✨'}
                                 </button>
                             )}
+
+                            <div className="text-center mt-sm">
+                                <button
+                                    type="button"
+                                    className="text-link"
+                                    onClick={() => setStep(1)}
+                                >
+                                    ← Back to Personal Info
+                                </button>
+                            </div>
                         </form>
                     )}
                 </div>
@@ -770,3 +675,4 @@ function ApplicationPage() {
 }
 
 export default ApplicationPage
+

@@ -52,7 +52,22 @@ router.post('/submit', globalSubmissionLimiter, applicationLimiter, upload.singl
         }
 
         // 2. Parse Resume & Calculate Score
-        const { text: resumeText, parsedData } = await parseResume(file.buffer, file.mimetype)
+        let resumeText = ''
+        let parsedData = { skills: [], education: '', experience: '' }
+
+        try {
+            const result = await parseResume(file.buffer, file.mimetype)
+            resumeText = result.text
+            parsedData = result.parsedData
+        } catch (parseError) {
+            console.error(JSON.stringify({
+                level: "warn",
+                event: "resume_parsing_failed",
+                error: parseError.message,
+                email: email
+            }))
+            // Continue with empty data - manual review required
+        }
 
         // Determine category for scoring
         const cleanCategory = jobCategory ? String(jobCategory).trim() : ''
