@@ -1,32 +1,29 @@
-import { getDB } from '../config/database.js'
-import AppError from '../utils/AppError.js'
+import { checkCandidateDuplicate } from '../services/candidateService.js'
 import logger from '../utils/logger.js'
 
+/**
+ * Check if a candidate has already applied
+ * @route POST /api/candidates/check-duplicate
+ */
 export const checkDuplicate = async (req, res, next) => {
     try {
         const { email } = req.body
 
-        const db = getDB()
-        const candidates = db.collection('candidates')
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Email is required' })
+        }
 
-        // Count how many applications this email has submitted
-        const count = await candidates.countDocuments({ email })
+        const result = await checkCandidateDuplicate(email)
 
-        // Allow up to 3 applications per email
-        const limit = 6
-        const canSubmit = count < limit
+        return res.status(200).json(result)
 
-        logger.info(`Duplicate check for ${email}: ${count}/${limit}`)
-
-        res.json({
-            success: true,
-            canSubmit,
-            count,
-            limit,
-            remaining: Math.max(0, limit - count)
-        })
     } catch (error) {
-        logger.error('Check duplicate error:', error)
-        next(new AppError('Failed to check duplicate', 500))
+        logger.error(`Error checking duplicate for ${req.body.email}: ${error.message}`)
+
+        // Don't leak internal errors to client for this endpoint
+        return res.status(500).json({
+            success: false,
+            message: 'Unable to verify email availability'
+        })
     }
 }

@@ -3,6 +3,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import { connectDB } from './config/database.js'
+import { verifyEmailConnection } from './services/emailService.js'
 import candidateRoutes from './routes/candidates.js'
 import applicationRoutes from './routes/applications.js'
 import errorHandler from './middleware/errorHandler.js'
@@ -38,12 +39,7 @@ app.use(cors({
         if (allowedOrigins.includes(origin) || origin?.endsWith('.vercel.app')) {
             callback(null, true)
         } else {
-            console.warn(JSON.stringify({
-                level: "warn",
-                event: "cors_blocked",
-                origin: origin,
-                timestamp: new Date().toISOString()
-            }))
+            logger.warn(`CORS blocked origin: ${origin}`)
             callback(new Error('Not allowed by CORS'))
         }
     },
@@ -60,9 +56,6 @@ app.use(express.urlencoded({ limit: '1mb', extended: true }))
 app.use('/api/candidates', candidateRoutes)
 app.use('/api/applications', applicationRoutes)
 
-// API Documentation (Swagger) - Removed for production
-// setupSwagger(app)
-
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({
@@ -72,56 +65,32 @@ app.get('/api/health', (req, res) => {
     })
 })
 
-// TEMP DEBUG: Email Connection Check
-import nodemailer from 'nodemailer'
-app.get('/api/debug/email-check', async (req, res) => {
-    try {
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true, // Use SSL
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD
-            }
-        });
-
-        await transporter.verify();
-        res.json({ status: 'success', message: 'SMTP Connection Successful', user: process.env.EMAIL_USER });
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            message: error.message,
-            code: error.code,
-            response: error.response
-        });
-    }
-});
-
 // Global Error Handler (must be last)
 app.use(errorHandler)
 
 // Start server
-// Start server
 async function startServer() {
     try {
-        console.log("STEP 1: Starting server...")
-        console.log("PORT:", PORT)
-        console.log("NODE_ENV:", process.env.NODE_ENV)
+        logger.info("🚀 Starting server initialization...")
+        logger.info(`PORT: ${PORT}`)
+        logger.info(`NODE_ENV: ${process.env.NODE_ENV}`)
 
-        console.log("STEP 2: Connecting to DB...")
+        // 1. Verify Database Connection
+        logger.info("STEP 1: Connecting to Database...")
         await connectDB()
 
-        console.log("STEP 3: DB connected. Starting listen...")
+        // 2. Verify Email Connection (Critical for this app)
+        logger.info("STEP 2: Verifying Email Service...")
+        await verifyEmailConnection()
 
+        // 3. Start Listening
         app.listen(PORT, '0.0.0.0', () => {
-            console.log("STEP 4: Server listening on port", PORT)
-            logger.info(`🚀 Server running on port ${PORT}`)
+            logger.info(`✅ Server fully ready and listening on port ${PORT}`)
         })
 
     } catch (error) {
-        console.error("FATAL STARTUP ERROR:", error)
-        process.exit(1)
+        logger.error("❌ FATAL STARTUP ERROR:", error)
+        process.exit(1) // Fail fast
     }
 }
 
