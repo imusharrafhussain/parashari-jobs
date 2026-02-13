@@ -13,7 +13,7 @@ export const checkDuplicate = async (req, res, next) => {
         const count = await candidates.countDocuments({ email })
 
         // Allow up to 3 applications per email
-        const limit = 3
+        const limit = 6
         const canSubmit = count < limit
 
         logger.info(`Duplicate check for ${email}: ${count}/${limit}`)

@@ -38,10 +38,10 @@ export const submitApplication = async (req, res, next) => {
 
         // Check submission count for this email (allow up to 3)
         const submissionCount = await candidates.countDocuments({ email })
-        if (submissionCount >= 3) {
+        if (submissionCount >= 6) {
             return res.status(400).json({
                 success: false,
-                message: 'Submission limit reached (3/3). Please try with a different email.'
+                message: 'Submission limit reached (6/6). Please try with a different email.'
             })
         }
 
