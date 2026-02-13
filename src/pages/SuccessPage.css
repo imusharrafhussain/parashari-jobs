@@ -1,0 +1,128 @@
+.success-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 160px 0 var(--space-2xl);
+}
+
+.success-card {
+    padding: var(--space-2xl);
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.success-icon {
+    font-size: 5rem;
+    margin-bottom: var(--space-lg);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.success-title {
+    color: var(--color-primary);
+    margin-bottom: var(--space-md);
+}
+
+.success-message {
+    font-size: 1.125rem;
+    margin-bottom: var(--space-xl);
+    line-height: 1.6;
+}
+
+.application-id-box {
+    background: rgba(92, 26, 26, 0.05);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-bottom: var(--space-2xl);
+}
+
+.label {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-xs);
+}
+
+.app-id {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: var(--font-heading);
+    color: var(--color-primary);
+    letter-spacing: 2px;
+}
+
+.timeline {
+    text-align: left;
+    margin-bottom: var(--space-xl);
+}
+
+.timeline-title {
+    text-align: center;
+    color: var(--color-primary);
+    margin-bottom: var(--space-lg);
+}
+
+.timeline-item {
+    display: flex;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    position: relative;
+}
+
+.timeline-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 30px;
+    width: 2px;
+    height: calc(100% + var(--space-lg));
+    background: rgba(92, 26, 26, 0.2);
+}
+
+.timeline-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+
+.timeline-content h4 {
+    color: var(--color-text);
+    margin-bottom: var(--space-xs);
+}
+
+.timeline-content p {
+    color: var(--color-text-secondary);
+    margin: 0;
+    font-size: 0.9375rem;
+}
+
+.success-note {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--color-primary);
+    padding: var(--space-md);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-lg);
+}
+
+.success-note p {
+    margin: 0;
+    font-size: 0.9375rem;
+    text-align: left;
+}
+
+.success-note strong {
+    color: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+    .success-card {
+        padding: var(--space-lg);
+    }
+
+    .success-icon {
+        font-size: 3.5rem;
+    }
+}

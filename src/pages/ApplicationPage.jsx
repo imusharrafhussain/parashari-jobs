@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { candidateAPI, applicationAPI } from '../utils/api'
 import { getStates, getCitiesByState } from '../data/indianLocations'
+import './ApplicationPage.css'
 
 function ApplicationPage() {
     const navigate = useNavigate()
@@ -127,8 +128,6 @@ function ApplicationPage() {
             // Check if email has reached submission limit (3)
             const { data: duplicateCheck } = await candidateAPI.checkDuplicate(formData.email)
 
-            console.log('Duplicate check response:', duplicateCheck)
-
             // Use fallback values if response is malformed
             const canSubmit = duplicateCheck?.canSubmit !== false
             const count = duplicateCheck?.count ?? 0
@@ -192,8 +191,6 @@ function ApplicationPage() {
             return
         }
 
-        console.log("Submitting:", { jobCategory: formData.jobCategory, customJobRole: formData.customJobRole });
-
         setLoading(true)
 
         try {
@@ -215,13 +212,6 @@ function ApplicationPage() {
             }
             formDataToSend.append('description', formData.description)
             formDataToSend.append('resume', resumeFile)
-
-            // DEBUG LOG FOR VERIFICATION
-            console.log('🚀 [Frontend] Sending Payload:', {
-                jobCategory: backendCategory,
-                customJobRole: formData.customJobRole,
-                fullName: formData.fullName
-            });
 
             const { data } = await applicationAPI.submit(formDataToSend)
 
@@ -487,189 +477,6 @@ function ApplicationPage() {
                     )}
                 </div>
             </div>
-
-            <style jsx>{`
-        .application-page {
-          min-height: 100vh;
-          padding: 160px 0 var(--space-2xl);
-        }
-
-        .app-header {
-          margin-bottom: var(--space-2xl);
-        }
-
-        .steps-indicator {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-top: var(--space-xl);
-          gap: var(--space-sm);
-        }
-
-        .step {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: var(--space-xs);
-        }
-
-        .step-number {
-          width: 50px;
-          height: 50px;
-          border-radius: 50%;
-          background: rgba(255, 255, 255, 0.1);
-          border: 2px solid rgba(255, 255, 255, 0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          font-size: 1.25rem;
-          transition: all 0.3s ease;
-        }
-
-        .step.active .step-number {
-          background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-          color: var(--color-text-light);
-          border-color: var(--color-primary);
-        }
-
-        .step-label {
-          font-size: 0.875rem;
-          color: var(--color-text-secondary);
-        }
-
-        .step.active .step-label {
-          color: var(--color-primary);
-          font-weight: 600;
-        }
-
-        .step-line {
-          width: 60px;
-          height: 2px;
-          background: rgba(255, 255, 255, 0.2);
-        }
-
-        .form-container {
-          max-width: 600px;
-          margin: 0 auto;
-          padding: var(--space-2xl);
-        }
-
-        .form-title {
-          text-align: center;
-          margin-bottom: var(--space-sm);
-          color: var(--color-primary);
-        }
-
-        .form-subtitle {
-          text-align: center;
-          margin-bottom: var(--space-xl);
-          color: var(--color-text-secondary);
-        }
-
-        .form-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: var(--space-md);
-        }
-
-        .otp-input {
-          text-align: center;
-          font-size: 1.5rem;
-          letter-spacing: 0.5em;
-          font-weight: 700;
-        }
-
-        .form-hint {
-          text-align: center;
-          font-size: 0.875rem;
-          color: var(--color-text-secondary);
-          margin-top: var(--space-xs);
-        }
-
-        .text-link {
-          background: none;
-          border: none;
-          color: var(--color-primary);
-          cursor: pointer;
-          font-size: 0.875rem;
-          transition: opacity 0.3s ease;
-        }
-
-        .text-link:hover {
-          opacity: 0.8;
-        }
-
-        /* Upload Area */
-        .upload-area {
-          margin-top: var(--space-lg);
-        }
-
-        .upload-label {
-          display: block;
-          padding: var(--space-2xl);
-          border: 2px dashed rgba(255, 255, 255, 0.2);
-          border-radius: var(--radius-md);
-          text-align: center;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .upload-label:hover {
-          border-color: var(--color-primary);
-          background: rgba(92, 26, 26, 0.05);
-        }
-
-        .upload-icon {
-          font-size: 3rem;
-          margin-bottom: var(--space-sm);
-        }
-
-        .upload-text {
-          font-size: 1.125rem;
-          margin-bottom: var(--space-xs);
-        }
-
-        .upload-hint {
-          font-size: 0.875rem;
-          color: var(--color-text-secondary);
-        }
-
-        .file-selected {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: var(--space-sm);
-        }
-
-        .file-icon {
-          font-size: 3rem;
-        }
-
-        .file-name {
-          font-weight: 600;
-          color: var(--color-primary);
-        }
-
-        .file-size {
-          font-size: 0.875rem;
-          color: var(--color-text-secondary);
-        }
-
-        @media (max-width: 768px) {
-          .form-row {
-            grid-template-columns: 1fr;
-          }
-
-          .steps-indicator {
-            flex-wrap: wrap;
-          }
-
-          .step-line {
-            display: none;
-          }
-        }
-      `}</style>
         </div>
     )
 }
