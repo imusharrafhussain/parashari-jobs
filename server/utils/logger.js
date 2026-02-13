@@ -37,14 +37,13 @@ const logger = winston.createLogger({
 })
 
 // Add console transport in development
-if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-        format: combine(
-            colorize(),
-            timestamp({ format: 'HH:mm:ss' }),
-            logFormat
-        )
-    }))
-}
+// Always log to console (Required for Render/Vercel)
+logger.add(new winston.transports.Console({
+    format: combine(
+        colorize(),
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        logFormat
+    )
+}))
 
 export default logger
