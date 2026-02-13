@@ -41,7 +41,7 @@ export const submitApplication = async (req, res, next) => {
         if (submissionCount >= 3) {
             return res.status(400).json({
                 success: false,
-                message: 'You have reached the maximum limit of 3 applications for this email address'
+                message: 'Submission limit reached (3/3). Please try with a different email.'
             })
         }
 

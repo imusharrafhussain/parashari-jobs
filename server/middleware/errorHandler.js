@@ -31,6 +31,20 @@ const errorHandler = (err, req, res, next) => {
         })
     }
 
+    // Handle Multer errors (File Upload)
+    if (err.name === 'MulterError') {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                success: false,
+                message: 'File too large. Maximum size is 3MB.'
+            })
+        }
+        return res.status(400).json({
+            success: false,
+            message: err.message
+        })
+    }
+
     // Programming or unknown errors: don't leak details
     return res.status(500).json({
         success: false,

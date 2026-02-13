@@ -173,9 +173,9 @@ function ApplicationPage() {
             return
         }
 
-        // Validate file size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            toast.error('File size must be less than 5MB')
+        // Validate file size (3MB to match backend)
+        if (file.size > 3 * 1024 * 1024) {
+            toast.error('File size must be less than 3MB')
             return
         }
 
@@ -428,7 +428,7 @@ function ApplicationPage() {
                         <form onSubmit={handleFinalSubmit}>
                             <h2 className="form-title">Upload Your Resume</h2>
                             <p className="form-subtitle">
-                                Upload your resume in PDF or DOCX format (max 5MB)
+                                Upload your resume in PDF or DOCX format (max 3MB)
                             </p>
 
                             <div className="upload-area">
@@ -452,7 +452,7 @@ function ApplicationPage() {
                                         <>
                                             <div className="upload-icon">☁️</div>
                                             <div className="upload-text">Click to upload or drag and drop</div>
-                                            <div className="upload-hint">PDF or DOCX (max 5MB)</div>
+                                            <div className="upload-hint">PDF or DOCX (max 3MB)</div>
                                         </>
                                     )}
                                 </label>
